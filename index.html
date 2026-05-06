@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vai me dar o precioso? 🥺</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;900&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #ff6eb4, #ff9de2, #ffb3f0, #c084fc);
+      background-size: 400% 400%;
+      animation: gradientShift 6s ease infinite;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Nunito', sans-serif;
+    }
+
+    @keyframes gradientShift {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      border-radius: 32px;
+      padding: 56px 48px;
+      text-align: center;
+      box-shadow: 0 16px 48px rgba(200, 80, 180, 0.3);
+      max-width: 420px;
+      width: 90%;
+      animation: popIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.7); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    .emoji-big {
+      font-size: 72px;
+      display: block;
+      margin-bottom: 16px;
+      animation: bounce 1.4s ease infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-12px); }
+    }
+
+    h1 {
+      font-size: 1.9rem;
+      font-weight: 900;
+      color: #fff;
+      text-shadow: 0 2px 8px rgba(160, 0, 120, 0.35);
+      margin-bottom: 36px;
+      line-height: 1.3;
+    }
+
+    #btn-sim {
+      font-family: 'Nunito', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 900;
+      border: none;
+      border-radius: 50px;
+      padding: 14px 38px;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      background: linear-gradient(135deg, #ff4fa3, #d946ef);
+      color: #fff;
+      box-shadow: 0 6px 20px rgba(217, 70, 239, 0.45);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    #btn-sim:hover {
+      transform: scale(1.08);
+      box-shadow: 0 10px 28px rgba(217, 70, 239, 0.55);
+    }
+
+    /* botão não fica solto na página, se move pelo viewport */
+    #btn-nao {
+      font-family: 'Nunito', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 900;
+      border: none;
+      border-radius: 50px;
+      padding: 14px 38px;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      background: #fff;
+      color: #d946ef;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+      position: fixed;
+      transition: left 0.05s, top 0.05s;
+      z-index: 10;
+      /* posição inicial: logo abaixo do centro */
+      left: 50%;
+      top: 62%;
+      transform: translateX(60px);
+    }
+
+    .heart {
+      position: fixed;
+      pointer-events: none;
+      animation: floatUp 1.8s ease-out forwards;
+      z-index: 9999;
+      user-select: none;
+    }
+
+    @keyframes floatUp {
+      0%   { opacity: 1; transform: translateY(0) scale(1) rotate(-10deg); }
+      60%  { opacity: 1; transform: translateY(-50vh) scale(1.4) rotate(12deg); }
+      100% { opacity: 0; transform: translateY(-80vh) scale(0.7) rotate(-8deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <span class="emoji-big">🥺</span>
+    <h1>vai me dar o precioso hoje?</h1>
+    <button id="btn-sim" onclick="simClick()">sim 💖</button>
+  </div>
+
+  <!-- botão não FORA do card para se mover livremente pela tela -->
+  <button id="btn-nao" onclick="naoClick()">não 😤</button>
+
+  <script>
+    const btnNao = document.getElementById('btn-nao');
+    let naoCount = 0;
+
+    function naoClick() {
+      naoCount++;
+
+      const w = btnNao.offsetWidth;
+      const h = btnNao.offsetHeight;
+      const pad = 16;
+
+      const maxX = window.innerWidth  - w - pad;
+      const maxY = window.innerHeight - h - pad;
+
+      const x = Math.floor(Math.random() * maxX) + pad;
+      const y = Math.floor(Math.random() * maxY) + pad;
+
+      btnNao.style.left      = x + 'px';
+      btnNao.style.top       = y + 'px';
+      btnNao.style.transform = 'none';
+
+      if (naoCount >= 3) {
+        btnNao.style.fontSize = '0.65rem';
+        btnNao.style.padding  = '7px 16px';
+      }
+    }
+
+    function simClick() {
+      document.getElementById('btn-sim').disabled = true;
+
+      const emojis = ['💖','💗','💓','💞','💕','❤️','🩷','💝','💘','😍'];
+      let count = 0;
+      const total = 40;
+
+      const interval = setInterval(() => {
+        const heart = document.createElement('span');
+        heart.classList.add('heart');
+        heart.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+        heart.style.left     = (Math.random() * 92) + 'vw';
+        heart.style.top      = (65 + Math.random() * 30) + 'vh';
+        heart.style.fontSize = (1.8 + Math.random() * 2.8) + 'rem';
+        document.body.appendChild(heart);
+        heart.addEventListener('animationend', () => heart.remove());
+
+        count++;
+        if (count >= total) {
+          clearInterval(interval);
+          window.location.href = 'https://memes.casa/audio/para-tira-que-eu-vou-cagar#google_vignette';
+        }
+      }, 55);
+    }
+  </script>
+</body>
+</html>
