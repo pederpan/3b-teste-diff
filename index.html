@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>git merge — visualizador interativo</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@300;500;700&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --main:     #58a6ff;
+      --feature:  #f78166;
+      --merge:    #3fb950;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --amber:    #d29922;
+      --purple:   #bc8cff;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 24px 64px;
+      gap: 40px;
+    }
+
+    header {
+      text-align: center;
+    }
+
+    header h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: clamp(1.4rem, 4vw, 2.2rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    header h1 span { color: var(--merge); }
+
+    header p {
+      margin-top: 8px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+
+    /* ── canvas card ── */
+    #canvas-wrap {
+      width: 100%;
+      max-width: 860px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: #0d1117;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot.r { background: #ff5f56; }
+    .dot.y { background: #febc2e; }
+    .dot.g { background: #27c93f; }
+
+    .bar-title {
+      flex: 1;
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 340px;
+    }
+
+    /* ── terminal ── */
+    #terminal {
+      width: 100%;
+      max-width: 860px;
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .term-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .term-bar-title {
+      flex: 1;
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+
+    #term-output {
+      padding: 16px 20px;
+      min-height: 140px;
+      max-height: 220px;
+      overflow-y: auto;
+      font-size: 0.78rem;
+      line-height: 1.8;
+    }
+
+    #term-output .line { display: block; }
+    .c-prompt { color: var(--merge); }
+    .c-cmd    { color: var(--text); }
+    .c-ok     { color: var(--merge); }
+    .c-info   { color: var(--main); }
+    .c-warn   { color: var(--amber); }
+    .c-err    { color: var(--feature); }
+    .c-purple { color: var(--purple); }
+
+    /* ── controls ── */
+    #controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    button {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      padding: 10px 22px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all .15s;
+      background: var(--surface);
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+
+    button:hover  { border-color: var(--main); color: var(--main); }
+    button:active { transform: scale(.97); }
+    button:disabled { opacity: .35; cursor: not-allowed; }
+
+    #btn-merge {
+      background: var(--merge);
+      color: #0d1117;
+      border-color: var(--merge);
+      font-weight: 700;
+    }
+    #btn-merge:hover { background: #56d364; border-color: #56d364; color: #0d1117; }
+
+    /* ── legend ── */
+    #legend {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      justify-content: center;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .leg-item { display: flex; align-items: center; gap: 8px; }
+    .leg-dot  { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>git <span>merge</span> — visualizador interativo</h1>
+  <p>adicione commits, faça o merge e veja o grafo ganhar vida</p>
+</header>
+
+<div id="canvas-wrap">
+  <div class="bar">
+    <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+    <span class="bar-title">repo: meu-projeto · branch graph</span>
+  </div>
+  <canvas id="graph" height="340"></canvas>
+</div>
+
+<div id="controls">
+  <button id="btn-commit-main">+ commit em main</button>
+  <button id="btn-commit-feat">+ commit em feature</button>
+  <button id="btn-merge">⟵ git merge feature</button>
+  <button id="btn-reset">↺ reset</button>
+</div>
+
+<div id="legend">
+  <div class="leg-item"><div class="leg-dot" style="background:var(--main)"></div>branch main</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--feature)"></div>branch feature</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--merge)"></div>merge commit</div>
+</div>
+
+<div id="terminal">
+  <div class="term-bar">
+    <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+    <span class="term-bar-title">terminal</span>
+  </div>
+  <div id="term-output"></div>
+</div>
+
+<script>
+/* ───────────── state ───────────── */
+const HASH = () => Math.random().toString(36).slice(2, 9);
+
+let state = null;
+
+function initialState() {
+  return {
+    shared: [
+      { id: HASH(), msg: 'initial commit', branch: 'shared' },
+      { id: HASH(), msg: 'adiciona README',  branch: 'shared' },
+    ],
+    main:    [],
+    feature: [],
+    merged:  false,
+    mergeId: null,
+  };
+}
+
+/* ───────────── canvas ───────────── */
+const canvas = document.getElementById('graph');
+const ctx    = canvas.getContext('2d');
+
+const COL = {
+  bg:      '#0d1117',
+  surface: '#161b22',
+  border:  '#30363d',
+  main:    '#58a6ff',
+  feature: '#f78166',
+  merge:   '#3fb950',
+  text:    '#e6edf3',
+  muted:   '#8b949e',
+};
+
+function resize() {
+  canvas.width  = canvas.offsetWidth  * devicePixelRatio;
+  canvas.height = canvas.offsetHeight * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  draw();
+}
+
+function draw() {
+  const W = canvas.offsetWidth;
+  const H = canvas.offsetHeight;
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.fillStyle = COL.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  if (!state) return;
+
+  /* layout params */
+  const PAD    = 32;
+  const yMain  = H * 0.38;
+  const yFeat  = H * 0.68;
+  const R      = 14;
+  const GAP    = 86;
+
+  const allMain  = [...state.shared, ...state.main];
+  const allFeat  = [...state.shared, ...state.feature];
+  const totalShared = state.shared.length;
+
+  /* x positions for shared */
+  const xOf = (i) => PAD + i * GAP;
+
+  /* ── draw feature branch line ── */
+  if (state.feature.length > 0 || state.merged) {
+    const branchX = xOf(totalShared - 1);
+
+    ctx.beginPath();
+    ctx.moveTo(branchX, yMain);
+
+    /* curved elbow */
+    ctx.bezierCurveTo(
+      branchX + GAP * 0.6, yMain,
+      branchX + GAP * 0.4, yFeat,
+      branchX + GAP,       yFeat
+    );
+
+    const featEnd = xOf(totalShared - 1 + state.feature.length);
+    ctx.lineTo(featEnd, yFeat);
+    ctx.strokeStyle = COL.feature;
+    ctx.lineWidth   = 2.5;
+    ctx.setLineDash([]);
+    ctx.stroke();
+
+    /* merge line back */
+    if (state.merged) {
+      const mergeX = xOf(totalShared - 1 + Math.max(state.main.length, state.feature.length) + 1);
+      ctx.beginPath();
+      ctx.moveTo(featEnd, yFeat);
+      ctx.bezierCurveTo(
+        featEnd + GAP * 0.5, yFeat,
+        mergeX  - GAP * 0.5, yMain,
+        mergeX, yMain
+      );
+      ctx.strokeStyle = COL.merge;
+      ctx.lineWidth   = 2.5;
+      ctx.stroke();
+    }
+  }
+
+  /* ── draw main line ── */
+  const mainLen = allMain.length + (state.merged ? 1 : 0);
+  ctx.beginPath();
+  ctx.moveTo(xOf(0), yMain);
+  ctx.lineTo(xOf(mainLen - 1), yMain);
+  ctx.strokeStyle = COL.main;
+  ctx.lineWidth   = 2.5;
+  ctx.setLineDash([]);
+  ctx.stroke();
+
+  /* ── draw shared commits ── */
+  state.shared.forEach((c, i) => {
+    drawCommit(xOf(i), yMain, c, COL.main, i === totalShared - 1);
+  });
+
+  /* ── draw main-only commits ── */
+  state.main.forEach((c, i) => {
+    drawCommit(xOf(totalShared + i), yMain, c, COL.main, false);
+  });
+
+  /* ── draw feature commits ── */
+  if (state.feature.length > 0) {
+    state.feature.forEach((c, i) => {
+      drawCommit(xOf(totalShared + i), yFeat, c, COL.feature, false);
+    });
+  }
+
+  /* ── merge commit ── */
+  if (state.merged) {
+    const mx = xOf(totalShared - 1 + Math.max(state.main.length, state.feature.length) + 1);
+    drawCommit(mx, yMain, { id: state.mergeId, msg: 'Merge branch \'feature\'' }, COL.merge, true, true);
+  }
+
+  /* ── branch labels ── */
+  drawLabel('main',    xOf(0), yMain - R - 14, COL.main);
+  if (state.feature.length > 0) {
+    drawLabel('feature', xOf(totalShared), yFeat - R - 14, COL.feature);
+  }
+}
+
+function drawCommit(x, y, commit, color, isHead, isMerge = false) {
+  /* glow ring for head */
+  if (isHead) {
+    ctx.beginPath();
+    ctx.arc(x, y, 22, 0, Math.PI * 2);
+    ctx.fillStyle = color + '22';
+    ctx.fill();
+  }
+
+  /* circle */
+  ctx.beginPath();
+  ctx.arc(x, y, isMerge ? 16 : 14, 0, Math.PI * 2);
+  ctx.fillStyle = '#0d1117';
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = isMerge ? 3 : 2.5;
+  ctx.stroke();
+
+  /* inner dot */
+  ctx.beginPath();
+  ctx.arc(x, y, isMerge ? 7 : 5, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+
+  /* hash label */
+  ctx.font = `500 10px 'JetBrains Mono', monospace`;
+  ctx.fillStyle = '#8b949e';
+  ctx.textAlign = 'center';
+  ctx.fillText(commit.id.slice(0, 7), x, y + 30);
+
+  /* message */
+  const maxW = 76;
+  ctx.font = `400 9.5px 'JetBrains Mono', monospace`;
+  ctx.fillStyle = '#e6edf3';
+  const msg = commit.msg.length > 14 ? commit.msg.slice(0, 13) + '…' : commit.msg;
+  ctx.fillText(msg, x, y + 42);
+}
+
+function drawLabel(text, x, y, color) {
+  const pad = 8;
+  ctx.font = `700 11px 'JetBrains Mono', monospace`;
+  const w = ctx.measureText(text).width + pad * 2;
+  roundRect(ctx, x - w / 2, y - 13, w, 18, 5);
+  ctx.fillStyle = color + '22';
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.fillText(text, x, y);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+/* ───────────── terminal ───────────── */
+const termEl = document.getElementById('term-output');
+
+function log(html) {
+  const line = document.createElement('span');
+  line.className = 'line';
+  line.innerHTML = html;
+  termEl.appendChild(line);
+  termEl.scrollTop = termEl.scrollHeight;
+}
+
+function cmd(command) {
+  log(`<span class="c-prompt">$ </span><span class="c-cmd">${command}</span>`);
+}
+
+/* ───────────── messages ───────────── */
+const MSGS_MAIN = [
+  'corrige bug no login',
+  'atualiza dependências',
+  'refatora utils',
+  'adiciona testes',
+  'melhora performance',
+  'ajusta configs de CI',
+];
+const MSGS_FEAT = [
+  'cria componente Card',
+  'estiliza sidebar',
+  'adiciona dark mode',
+  'implementa filtro',
+  'conecta com API',
+  'adiciona animações',
+];
+
+let idxMain = 0, idxFeat = 0;
+
+/* ───────────── actions ───────────── */
+function commitMain() {
+  if (state.merged) return;
+  const msg = MSGS_MAIN[idxMain % MSGS_MAIN.length];
+  state.main.push({ id: HASH(), msg, branch: 'main' });
+  idxMain++;
+  cmd(`git commit -m "${msg}"`);
+  log(`<span class="c-ok">[main ${state.main[state.main.length-1].id.slice(0,7)}] ${msg}</span>`);
+  draw();
+}
+
+function commitFeat() {
+  if (state.merged) return;
+  const msg = MSGS_FEAT[idxFeat % MSGS_FEAT.length];
+  state.feature.push({ id: HASH(), msg, branch: 'feature' });
+  idxFeat++;
+  cmd(`git commit -m "${msg}"`);
+  log(`<span class="c-ok">[feature ${state.feature[state.feature.length-1].id.slice(0,7)}] ${msg}</span>`);
+  draw();
+}
+
+function doMerge() {
+  if (state.merged) return;
+  if (state.feature.length === 0) {
+    cmd('git merge feature');
+    log(`<span class="c-err">fatal: branch 'feature' não tem commits. Adicione pelo menos um commit na feature antes.</span>`);
+    return;
+  }
+
+  cmd('git checkout main');
+  log(`<span class="c-info">Switched to branch 'main'</span>`);
+
+  setTimeout(() => {
+    cmd('git merge feature');
+    const mid = HASH();
+    state.mergeId = mid;
+    state.merged  = true;
+
+    const feat = state.feature.length;
+    const main = state.main.length;
+    log(`<span class="c-purple">Merge made by the 'ort' strategy.</span>`);
+    log(`<span class="c-ok"> ${feat + main} arquivo(s) changed, merge commit ${mid.slice(0,7)}</span>`);
+    log(`<span class="c-warn">Fast-forward: não — histórico divergente detectado.</span>`);
+    log(`<span class="c-ok">✓ merge concluído com sucesso!</span>`);
+
+    document.getElementById('btn-merge').disabled       = true;
+    document.getElementById('btn-commit-main').disabled = true;
+    document.getElementById('btn-commit-feat').disabled = true;
+
+    draw();
+  }, 400);
+}
+
+function reset() {
+  state  = initialState();
+  idxMain = 0; idxFeat = 0;
+  termEl.innerHTML = '';
+
+  document.getElementById('btn-merge').disabled       = false;
+  document.getElementById('btn-commit-main').disabled = false;
+  document.getElementById('btn-commit-feat').disabled = false;
+
+  cmd('git init');
+  log(`<span class="c-ok">Initialized empty Git repository</span>`);
+  cmd('git checkout -b feature');
+  log(`<span class="c-info">Switched to a new branch 'feature'</span>`);
+  log(`<span class="c-muted" style="color:var(--muted)">— adicione commits e depois faça o merge —</span>`);
+  draw();
+}
+
+/* ───────────── boot ───────────── */
+document.getElementById('btn-commit-main').addEventListener('click', commitMain);
+document.getElementById('btn-commit-feat').addEventListener('click', commitFeat);
+document.getElementById('btn-merge').addEventListener('click', doMerge);
+document.getElementById('btn-reset').addEventListener('click', reset);
+
+window.addEventListener('resize', resize);
+new ResizeObserver(resize).observe(canvas);
+
+reset();
+</script>
+</body>
+</html>
